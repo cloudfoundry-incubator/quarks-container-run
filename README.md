@@ -2,4 +2,4 @@
 
 ## Generating mocks
 
-Run `go generate ./container-run/...` to generate the mocks for the container-run packages.
+Run `go generate ./...` to generate the mocks for the container-run packages.
