@@ -1,0 +1,146 @@
+resource_types:
+- name: pull-request
+  type: docker-image
+  source:
+    repository: teliaoss/github-pr-resource
+- name: github-status
+  type: docker-image
+  source:
+    repository: resource/github-status
+    tag: release
+
+resources:
+- name: container-run-master
+  icon: github-circle
+  type: git
+  source:
+    branch: master
+    uri: https://github.com/cloudfoundry-incubator/quarks-container-run
+- name: container-run-pr
+  check_every: 10m
+  icon: github-circle
+  type: pull-request
+  webhook_token: ((cfcontainerizationbot.github-webhook-token))
+  source:
+    repository: cloudfoundry-incubator/quarks-container-run
+    access_token: ((cfcontainerizationbot.github-access-token))
+    disable_forks: true
+- name: golang-1.13.x-image
+  type: registry-image
+  icon: docker
+  source:
+    repository: golang
+    tag: "1.13"
+- name: github-status
+  icon: github-circle
+  type: github-status
+  source:
+    access_token: ((cfcontainerizationbot.github-access-token))
+    repo: cloudfoundry-incubator/quarks-container-run
+
+jobs:
+- name: container-run-master
+  public: true
+  plan:
+  - get: container-run-master
+    trigger: true
+  - put: github-status
+    params:
+      context: test
+      description: All tests
+      path: container-run-master
+      state: pending
+  - get: golang-1.13.x-image
+    trigger: true
+  - do:
+    - task: test
+      image: golang-1.13.x-image
+      config:
+        platform: linux
+        inputs:
+        - name: container-run-master
+        run:
+          path: /bin/sh
+          args:
+          - -c
+          - |-
+            GOPATH=$PWD/go
+
+            cd container-run-master
+
+            go mod tidy
+            if ! git diff-index --quiet HEAD --; then
+              >&2 echo "Files changed by 'go mod tidy' should be commited"
+              exit 1
+            fi
+
+            go vet ./...
+            go build ./...
+            go test -v ./...
+    on_failure:
+      put: github-status
+      params:
+        context: test
+        description: All tests
+        path: container-run-master
+        state: failure
+    on_success:
+      put: github-status
+      params:
+        context: test
+        description: All tests
+        path: container-run-master
+        state: success
+
+- name: container-run-pr
+  public: false
+  plan:
+  - get: container-run-pr
+    trigger: true
+  - put: github-status
+    params:
+      context: test
+      description: All tests
+      path: container-run-pr
+      state: pending
+  - get: golang-1.13.x-image
+    trigger: true
+  - do:
+    - task: test
+      image: golang-1.13.x-image
+      config:
+        platform: linux
+        inputs:
+        - name: container-run-pr
+        run:
+          path: /bin/sh
+          args:
+          - -c
+          - |-
+            GOPATH=$PWD/go
+
+            cd container-run-pr
+
+            go mod tidy
+            if ! git diff-index --quiet HEAD --; then
+              >&2 echo "Files changed by 'go mod tidy' should be commited"
+              exit 1
+            fi
+
+            go vet ./...
+            go build ./...
+            go test -v ./...
+    on_failure:
+      put: github-status
+      params:
+        context: test
+        description: All tests
+        path: container-run-pr
+        state: failure
+    on_success:
+      put: github-status
+      params:
+        context: test
+        description: All tests
+        path: container-run-pr
+        state: success
