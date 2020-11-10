@@ -1,0 +1,35 @@
+name: Pull Requests
+on:
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch: {}
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: [ '~1.13', '~1.14', '~1.15', '~1' ]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        persist-credentials: false
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go }}
+    - name: Tidy
+      run: |
+        go mod tidy
+        if ! git diff-index --quiet HEAD --; then
+          >&2 echo "Files changed by 'go mod tidy' should be committed"
+          exit 1
+        fi
+    - name: Vet
+      run: go vet ./...
+    - name: Build
+      run: go build ./...
+    - name: Test
+      run: go test -v ./...
