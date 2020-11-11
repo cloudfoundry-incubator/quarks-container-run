@@ -403,6 +403,11 @@ var _ = Describe("Run", func() {
 				Signal(syscall.SIGCHLD).
 				Return(nil).
 				AnyTimes()
+			// Golang runtime internally raises SIGURG; we need to ignore them.
+			process.EXPECT().
+				Signal(syscall.SIGURG).
+				Return(nil).
+				AnyTimes()
 			runner := NewMockRunner(ctrl)
 			runner.EXPECT().
 				Run(command, stdio).
@@ -454,6 +459,11 @@ var _ = Describe("Run", func() {
 			// test case. We may receive them, or not.
 			process.EXPECT().
 				Signal(syscall.SIGCHLD).
+				Return(nil).
+				AnyTimes()
+			// Golang runtime internally raises SIGURG; we need to ignore them.
+			process.EXPECT().
+				Signal(syscall.SIGURG).
 				Return(nil).
 				AnyTimes()
 			runner := NewMockRunner(ctrl)
@@ -514,6 +524,11 @@ var _ = Describe("Run", func() {
 			// test case. We may receive them, or not.
 			process.EXPECT().
 				Signal(syscall.SIGCHLD).
+				Return(nil).
+				AnyTimes()
+			// Golang runtime internally raises SIGURG; we need to ignore them.
+			process.EXPECT().
+				Signal(syscall.SIGURG).
 				Return(nil).
 				AnyTimes()
 			runner := NewMockRunner(ctrl)
@@ -584,6 +599,11 @@ var _ = Describe("Run", func() {
 			// test case. We may receive them, or not.
 			process.EXPECT().
 				Signal(syscall.SIGCHLD).
+				Return(nil).
+				AnyTimes()
+			// Golang runtime internally raises SIGURG; we need to ignore them.
+			process.EXPECT().
+				Signal(syscall.SIGURG).
 				Return(nil).
 				AnyTimes()
 			runner := NewMockRunner(ctrl)
@@ -700,6 +720,11 @@ var _ = Describe("Run", func() {
 				Signal(syscall.SIGCHLD).
 				Return(nil).
 				AnyTimes()
+			// Golang runtime internally raises SIGURG; we need to ignore them.
+			process.EXPECT().
+				Signal(syscall.SIGURG).
+				Return(nil).
+				AnyTimes()
 			runner := NewMockRunner(ctrl)
 			runner.EXPECT().
 				Run(command, stdio).
@@ -801,6 +826,12 @@ var _ = Describe("ProcessRegistry", func() {
 			p3.EXPECT().Signal(sig).Return(nil)
 			p4.EXPECT().Signal(sig).Return(expectedErr)
 
+			// Golang runtime internally raises SIGURG; we need to ignore them.
+			p1.EXPECT().Signal(syscall.SIGURG).Return(nil).AnyTimes()
+			p2.EXPECT().Signal(syscall.SIGURG).Return(nil).AnyTimes()
+			p3.EXPECT().Signal(syscall.SIGURG).Return(nil).AnyTimes()
+			p4.EXPECT().Signal(syscall.SIGURG).Return(nil).AnyTimes()
+
 			errors := pr.SignalAll(sig)
 			Expect(errors).To(Equal([]error{expectedErr, expectedErr}))
 		})
@@ -817,6 +848,10 @@ var _ = Describe("ProcessRegistry", func() {
 			p1.EXPECT().Signal(sig).Return(nil)
 			p2.EXPECT().Signal(sig).Return(nil)
 
+			// Golang runtime internally raises SIGURG; we need to ignore them.
+			p1.EXPECT().Signal(syscall.SIGURG).Return(nil).AnyTimes()
+			p2.EXPECT().Signal(syscall.SIGURG).Return(nil).AnyTimes()
+			
 			errors := pr.SignalAll(sig)
 			Expect(errors).To(Equal([]error{}))
 		})
