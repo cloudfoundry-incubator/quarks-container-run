@@ -67,7 +67,8 @@ func Run(
 	}
 
 	done := make(chan struct{}, 1)
-	errors := make(chan error)
+	sigterm := make(chan struct{}, 1)
+	errors := make(chan error, 1)
 	sigs := make(chan os.Signal, 1)
 	commands := make(chan processCommand)
 
@@ -102,7 +103,7 @@ func Run(
 		return err
 	}
 
-	go processRegistry.HandleSignals(sigs, errors)
+	go processRegistry.HandleSignals(sigs, sigterm, errors)
 
 	// This flag records the state of the system and its child
 	// processes. It is set to true when the child processes are
@@ -161,15 +162,24 @@ func Run(
 				}
 			}
 		case <-done:
-			// Ignore a done process when we actively
-			// stopped the children via ProcessStop.
-			if active {
-				return nil
+			// When the main process returns without error, treat it the
+			// same as if it has been stopped.
+			active = false
+		case <-sigterm:
+			// Once we receive a SIGTERM we wait until all child processes have terminated
+			// because Kubernetes will kill the container once the main process exits.
+			for {
+				count := processRegistry.Count()
+				if count == 0 {
+					return nil
+				}
+				time.Sleep(1 * time.Second)
 			}
 		case err := <-errors:
+			fmt.Printf("Error: %v\n", err)
 			// Ignore done signals when we actively
 			// stopped the children via ProcessStop.
-			// Wait returns with !state.Sucess, `signal: killed`
+			// Wait returns with !state.Success, `signal: killed`
 			if active {
 				return err
 			}
@@ -516,6 +526,11 @@ func NewProcessRegistry() *ProcessRegistry {
 	}
 }
 
+// Count returns the number of processes in the registry
+func (pr *ProcessRegistry) Count() int {
+	return len(pr.processes)
+}
+
 // Register registers a process in the registry and returns how many processes are registered.
 func (pr *ProcessRegistry) Register(p Process) int {
 	pr.Lock()
@@ -555,11 +570,14 @@ func (pr *ProcessRegistry) SignalAll(sig os.Signal) []error {
 // HandleSignals handles the signals channel and forwards them to the
 // registered processes. After a signal is handled it keeps running to
 // handle any future ones.
-func (pr *ProcessRegistry) HandleSignals(sigs <-chan os.Signal, errors chan<- error) {
+func (pr *ProcessRegistry) HandleSignals(sigs <-chan os.Signal, sigterm chan<- struct{}, errors chan<- error) {
 	for {
 		sig := <-sigs
 		for _, err := range pr.SignalAll(sig) {
 			errors <- err
+		}
+		if sig == syscall.SIGTERM {
+			sigterm <- struct{}{}
 		}
 	}
 }
