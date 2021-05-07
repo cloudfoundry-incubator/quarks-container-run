@@ -26,6 +26,8 @@ const (
 	ProcessStart = "START"
 	// ProcessStop is the command to stop and suspend the child processes.
 	ProcessStop = "STOP"
+	// SignalQuit is the command to send a QUIT signal to the child processes.
+	SignalQuit = "QUIT"
 )
 
 type processCommand string
@@ -123,7 +125,6 @@ func Run(
 			// already stopped does nothing. Similarly for
 			// demanding a start when the children are
 			// started/up/active.
-
 			switch cmd {
 			case ProcessStop:
 				if active {
@@ -160,6 +161,8 @@ func Run(
 
 					active = true
 				}
+			case SignalQuit:
+				processRegistry.SignalAll(syscall.SIGQUIT)
 			}
 		case <-done:
 			// When the main process returns without error, treat it the
@@ -232,7 +235,7 @@ func handlePacket(
 
 	command := strings.TrimSpace(string(packet[:n]))
 	switch command {
-	case ProcessStart, ProcessStop:
+	case ProcessStart, ProcessStop, SignalQuit:
 		commands <- processCommand(command)
 	default:
 		// Bad commands are ignored. Else they could be used to DOS the runner.
