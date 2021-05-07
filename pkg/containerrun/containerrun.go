@@ -91,6 +91,8 @@ func Run(
 	}
 
 	if err := startProcesses(
+		jobName,
+		processName,
 		runner,
 		conditionRunner,
 		commandChecker,
@@ -145,6 +147,8 @@ func Run(
 			case ProcessStart:
 				if !active {
 					err := startProcesses(
+						jobName,
+						processName,
 						runner,
 						conditionRunner,
 						commandChecker,
@@ -249,6 +253,8 @@ func stopProcesses(processRegistry *ProcessRegistry, errors chan<- error) {
 }
 
 func startProcesses(
+	jobName string,
+	processName string,
 	runner Runner,
 	conditionRunner Runner,
 	commandChecker Checker,
@@ -261,6 +267,8 @@ func startProcesses(
 	done chan struct{},
 ) error {
 	if err := startMainProcess(
+		jobName,
+		processName,
 		runner,
 		command,
 		stdio,
@@ -285,6 +293,8 @@ func startProcesses(
 }
 
 func startMainProcess(
+	jobName string,
+	processName string,
 	runner Runner,
 	command Command,
 	stdio Stdio,
@@ -298,8 +308,13 @@ func startMainProcess(
 	}
 	processRegistry.Register(process)
 
+	sentinel := fmt.Sprintf("/var/vcap/data/%s/%s_containerrun.running", jobName, processName)
+	file, _ := os.Create(sentinel)
+	_ = file.Close()
+
 	go func() {
 		defer processRegistry.Unregister(process)
+		defer os.Remove(sentinel)
 		if err := process.Wait(); err != nil {
 			errors <- &runErr{err}
 			return
