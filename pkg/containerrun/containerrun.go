@@ -286,6 +286,7 @@ func startMainProcess(
 	processRegistry.Register(process)
 
 	go func() {
+		defer processRegistry.Unregister(process)
 		if err := process.Wait(); err != nil {
 			errors <- &runErr{err}
 			return
@@ -330,6 +331,7 @@ func startPostStartProcesses(
 					return
 				}
 				processRegistry.Register(postStartProcess)
+				defer processRegistry.Unregister(postStartProcess)
 				if err := postStartProcess.Wait(); err != nil {
 					errors <- &runErr{err}
 					return
@@ -519,6 +521,21 @@ func (pr *ProcessRegistry) Register(p Process) int {
 	pr.Lock()
 	defer pr.Unlock()
 	pr.processes = append(pr.processes, p)
+	return len(pr.processes)
+}
+
+// Unregister removes a process from the registry and returns how many processes are registered.
+func (pr *ProcessRegistry) Unregister(p Process) int {
+	pr.Lock()
+	defer pr.Unlock()
+
+	processes := make([]Process, 0)
+	for _, process := range pr.processes {
+		if p != process {
+			processes = append(processes, process)
+		}
+	}
+	pr.processes = processes
 	return len(pr.processes)
 }
 
