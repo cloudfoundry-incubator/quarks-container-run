@@ -180,7 +180,7 @@ func Run(
 			// same as if it has been stopped.
 			active = false
 		case <-sigterm:
-			log.Debugln("Received SIGTERM; waiting for all children to stop")
+			log.Debugln("Waiting for all children to stop")
 			// Once we receive a SIGTERM we wait until all child processes have terminated
 			// because Kubernetes will kill the container once the main process exits.
 			for {
@@ -577,6 +577,8 @@ func (pr *ProcessRegistry) Count() int {
 func (pr *ProcessRegistry) Register(p Process) int {
 	pr.Lock()
 	defer pr.Unlock()
+
+	log.Debugf("Registering process %s\n", p)
 	pr.processes = append(pr.processes, p)
 	return len(pr.processes)
 }
@@ -586,6 +588,7 @@ func (pr *ProcessRegistry) Unregister(p Process) int {
 	pr.Lock()
 	defer pr.Unlock()
 
+	log.Debugf("Unregistering process %s\n", p)
 	processes := make([]Process, 0)
 	for _, process := range pr.processes {
 		if p != process {
@@ -603,6 +606,7 @@ func (pr *ProcessRegistry) Unregister(p Process) int {
 func (pr *ProcessRegistry) SignalAll(sig os.Signal) []error {
 	pr.Lock()
 	defer pr.Unlock()
+	log.Debugf("Sending '%s' signal to %d processes\n", sig, len(pr.processes))
 	errors := make([]error, 0)
 	for _, p := range pr.processes {
 		if err := p.Signal(sig); err != nil {
