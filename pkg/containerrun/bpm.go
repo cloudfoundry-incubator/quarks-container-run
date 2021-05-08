@@ -37,9 +37,23 @@ fi
 
 CONTAINER_RUN="/var/vcap/data/${JOB}/${PROCESS}_containerrun"
 if [ "$CMD" == "running" ]; then
-    test -f "${CONTAINER_RUN}.running"
+    if [ -f "${CONTAINER_RUN}.running" ]; then
+        echo "yes"
+        exit 0
+    else
+        echo "no"
+        exit 1
+    fi
 else
     echo "${CMD^^}" | nc -w 1 -uU "${CONTAINER_RUN}.sock"
+    if [ "${CMD}" == "stop" ]; then
+        for i in $(seq 30); do
+            test ! -f "${CONTAINER_RUN}.running" && exit 0
+            sleep 1
+        done
+        echo Process did not stop within 30 seconds
+        exit 1
+    fi
 fi
 `
 	if _, err := os.Stat(fileName); !os.IsNotExist(err) {
