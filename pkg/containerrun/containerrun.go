@@ -77,7 +77,7 @@ func Run(
 	sigs := make(chan os.Signal, 1)
 	commands := make(chan processCommand)
 
-	signal.Notify(sigs)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	processRegistry := NewProcessRegistry()
 
 	command := Command{
