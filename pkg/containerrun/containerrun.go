@@ -71,7 +71,7 @@ func Run(
 
 	done := make(chan struct{}, 1)
 	sigterm := make(chan struct{}, 1)
-	errors := make(chan error, 1)
+	errors := make(chan error)
 	sigs := make(chan os.Signal, 1)
 	commands := make(chan processCommand)
 
@@ -250,9 +250,15 @@ func handlePacket(
 }
 
 func stopProcesses(processRegistry *ProcessRegistry, errors chan<- error) {
-	for _, err := range processRegistry.SignalAll(os.Kill) {
-		errors <- err
-	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		for _, err := range processRegistry.SignalAll(os.Kill) {
+			errors <- err
+		}
+		wg.Done()
+	}()
+	wg.Wait()
 }
 
 func startProcesses(
@@ -594,6 +600,7 @@ func (pr *ProcessRegistry) SignalAll(sig os.Signal) []error {
 func (pr *ProcessRegistry) HandleSignals(sigs <-chan os.Signal, sigterm chan<- struct{}, errors chan<- error) {
 	for {
 		sig := <-sigs
+		log.Debugf("Sending '%s' signal to %d processes", sig, len(pr.processes))
 		for _, err := range pr.SignalAll(sig) {
 			errors <- err
 		}
