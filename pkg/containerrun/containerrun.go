@@ -334,12 +334,16 @@ func startMainProcess(
 	_ = file.Close()
 
 	go func() {
-		defer processRegistry.Unregister(process)
-		defer os.Remove(sentinel)
 		if err := process.Wait(); err != nil {
+			log.Debugf("Process has failed with error: %s\n", err)
+			processRegistry.Unregister(process)
+			os.Remove(sentinel)
 			errors <- &runErr{err}
 			return
 		}
+		log.Debugln("Process has ended normally")
+		processRegistry.Unregister(process)
+		os.Remove(sentinel)
 		done <- struct{}{}
 	}()
 
