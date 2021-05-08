@@ -633,12 +633,15 @@ func (pr *ProcessRegistry) KillAll() {
 func (pr *ProcessRegistry) HandleSignals(sigs <-chan os.Signal, sigterm chan<- struct{}, errors chan<- error) {
 	for {
 		sig := <-sigs
-		log.Debugf("Sending '%s' signal to %d processes", sig, len(pr.processes))
-		for _, err := range pr.SignalAll(sig) {
-			errors <- err
-		}
-		if sig == syscall.SIGTERM {
+		log.Debugf("Received '%s' signal\n", sig)
+		if sig == syscall.SIGTERM || sig == syscall.SIGINT {
+			stopProcesses(pr, errors)
+			log.Debugln("Write to sigterm channel")
 			sigterm <- struct{}{}
+		} else {
+			for _, err := range pr.SignalAll(sig) {
+				errors <- err
+			}
 		}
 	}
 }
