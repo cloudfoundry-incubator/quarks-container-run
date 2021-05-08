@@ -6,6 +6,7 @@ package containerrun
 import (
 	"context"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net"
@@ -121,6 +122,7 @@ func Run(
 	for {
 		select {
 		case cmd := <-commands:
+			log.Debugf("Received %s command\n", cmd)
 			// Note: Commands are ignored if the system is
 			// already in the requested state. I.e
 			// demanding things to stop when things are
@@ -173,6 +175,7 @@ func Run(
 			// same as if it has been stopped.
 			active = false
 		case <-sigterm:
+			log.Debugln("Received SIGTERM; waiting for all children to stop")
 			// Once we receive a SIGTERM we wait until all child processes have terminated
 			// because Kubernetes will kill the container once the main process exits.
 			for {
