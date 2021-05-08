@@ -6,7 +6,6 @@ package containerrun
 import (
 	"context"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net"
@@ -17,11 +16,14 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
 	postStartTimeout   = time.Minute * 15
 	conditionSleepTime = time.Second * 3
+	sigtermTimeout     = time.Second * 20
 
 	// ProcessStart is the command to restart the suspended child processes.
 	ProcessStart = "START"
@@ -148,6 +150,9 @@ func Run(
 				}
 			case ProcessStart:
 				if !active {
+					// Make sure any previous instance is gone now, and the kill timer is stopped.
+					processRegistry.KillAll()
+
 					err := startProcesses(
 						jobName,
 						processName,
@@ -253,9 +258,16 @@ func stopProcesses(processRegistry *ProcessRegistry, errors chan<- error) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		for _, err := range processRegistry.SignalAll(os.Kill) {
+		log.Debugln("sending SIGTERM")
+		for _, err := range processRegistry.SignalAll(syscall.SIGTERM) {
 			errors <- err
 		}
+		// bpm would send a SIGQUIT signal to dump the stack before sending SIGKILL,
+		// but there doesn't seem to be a point to be doing it in this context.
+		processRegistry.timer = time.AfterFunc(sigtermTimeout, func() {
+			log.Debugln("timeout SIGTERM")
+			processRegistry.KillAll()
+		})
 		wg.Done()
 	}()
 	wg.Wait()
@@ -543,6 +555,7 @@ type Stdio struct {
 // ProcessRegistry handles all the processes.
 type ProcessRegistry struct {
 	processes []Process
+	timer     *time.Timer
 	sync.Mutex
 }
 
@@ -550,6 +563,8 @@ type ProcessRegistry struct {
 func NewProcessRegistry() *ProcessRegistry {
 	return &ProcessRegistry{
 		processes: make([]Process, 0),
+		// It should always be safe to call timer.Stop(), so it must not be nil.
+		timer: time.NewTimer(time.Millisecond),
 	}
 }
 
@@ -578,6 +593,9 @@ func (pr *ProcessRegistry) Unregister(p Process) int {
 		}
 	}
 	pr.processes = processes
+	if len(pr.processes) == 0 {
+		pr.timer.Stop()
+	}
 	return len(pr.processes)
 }
 
@@ -592,6 +610,13 @@ func (pr *ProcessRegistry) SignalAll(sig os.Signal) []error {
 		}
 	}
 	return errors
+}
+
+// KillAll stops the timer and sends a kill signal to all registered processes.
+func (pr *ProcessRegistry) KillAll() {
+	log.Debugln("KillAll")
+	pr.timer.Stop()
+	pr.SignalAll(os.Kill)
 }
 
 // HandleSignals handles the signals channel and forwards them to the
