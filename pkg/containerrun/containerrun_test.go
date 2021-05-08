@@ -871,6 +871,7 @@ var _ = Describe("ProcessRegistry", func() {
 		It("receives an error on the errors channel when signaling a process fails", func() {
 			expectedErr := fmt.Errorf("failed to signal")
 			sigs := make(chan os.Signal, 1)
+			sigterm := make(chan struct{}, 1)
 			errors := make(chan error)
 			sig := syscall.SIGTERM
 
@@ -881,7 +882,7 @@ var _ = Describe("ProcessRegistry", func() {
 
 			p1.EXPECT().Signal(sig).Return(expectedErr)
 
-			go pr.HandleSignals(sigs, errors)
+			go pr.HandleSignals(sigs, sigterm, errors)
 			sigs <- sig
 			err := <-errors
 			Expect(err).To(Equal(expectedErr))
@@ -889,6 +890,7 @@ var _ = Describe("ProcessRegistry", func() {
 
 		It("receives no error when signaling a process succeeds", func() {
 			sigs := make(chan os.Signal, 1)
+			sigterm := make(chan struct{}, 1)
 			errors := make(chan error)
 			sig := syscall.SIGTERM
 
@@ -899,7 +901,7 @@ var _ = Describe("ProcessRegistry", func() {
 
 			p1.EXPECT().Signal(sig).Return(nil)
 
-			go pr.HandleSignals(sigs, errors)
+			go pr.HandleSignals(sigs, sigterm, errors)
 			sigs <- sig
 			Consistently(errors).ShouldNot(Receive())
 		})
