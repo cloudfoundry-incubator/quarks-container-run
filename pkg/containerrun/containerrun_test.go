@@ -135,7 +135,17 @@ var _ = Describe("Run", func() {
 			Run(command, stdio).
 			Return(process, nil).
 			Times(1)
-		err := Run(runner, nil, nil, spinner, stdio, commandLine, "job", "process", "", []string{}, "", []string{})
+
+		sigTermChan := make(chan struct{}, 1)
+		resultChan := make(chan error)
+		go func() {
+			err := RunWithTestChan(runner, nil, nil, spinner, stdio, commandLine, "job", "process", "", []string{}, "", []string{}, sigTermChan)
+			resultChan <- err
+		}()
+
+		sigTermChan <- struct{}{}
+
+		err := <-resultChan
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -159,7 +169,16 @@ var _ = Describe("Run", func() {
 			Check(postStart.Name).
 			Return(false).
 			Times(1)
-		err := Run(runner, nil, checker, spinner, stdio, commandLine, "job", "process", postStart.Name, postStart.Arg, "", []string{})
+		sigTermChan := make(chan struct{}, 1)
+		resultChan := make(chan error)
+		go func() {
+			err := RunWithTestChan(runner, nil, checker, spinner, stdio, commandLine, "job", "process", postStart.Name, postStart.Arg, "", []string{}, sigTermChan)
+			resultChan <- err
+		}()
+
+		sigTermChan <- struct{}{}
+
+		err := <-resultChan
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -287,7 +306,17 @@ var _ = Describe("Run", func() {
 				Return(true).
 				Times(1)
 			conditionRunner := NewMockRunner(ctrl)
-			err := Run(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", postStart.Name, postStart.Arg, "", []string{})
+
+			sigTermChan := make(chan struct{}, 1)
+			resultChan := make(chan error)
+			go func() {
+				err := RunWithTestChan(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", postStart.Name, postStart.Arg, "", []string{}, sigTermChan)
+				resultChan <- err
+			}()
+
+			sigTermChan <- struct{}{}
+
+			err := <-resultChan
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
@@ -378,7 +407,17 @@ var _ = Describe("Run", func() {
 				}).
 				Return(nil, nil).
 				Times(1)
-			err := Run(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", postStart.Name, postStart.Arg, postStartCondition.Name, postStartCondition.Arg)
+
+			sigTermChan := make(chan struct{}, 1)
+			resultChan := make(chan error)
+			go func() {
+				err := RunWithTestChan(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", postStart.Name, postStart.Arg, postStartCondition.Name, postStartCondition.Arg, sigTermChan)
+				resultChan <- err
+			}()
+
+			sigTermChan <- struct{}{}
+
+			err := <-resultChan
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
@@ -432,7 +471,16 @@ var _ = Describe("Run", func() {
 				ListenPacket(gomock.Any(), gomock.Any()).
 				Return(bogus, nil).
 				AnyTimes()
-			err := Run(runner, nil, nil, emit_bogus, stdio, commandLine, "job", "process", "", []string{}, "", []string{})
+			sigTermChan := make(chan struct{}, 1)
+			resultChan := make(chan error)
+			go func() {
+				err := RunWithTestChan(runner, nil, nil, emit_bogus, stdio, commandLine, "job", "process", "", []string{}, "", []string{}, sigTermChan)
+				resultChan <- err
+			}()
+
+			sigTermChan <- struct{}{}
+
+			err := <-resultChan
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -556,7 +604,16 @@ var _ = Describe("Run", func() {
 				Do(func(net, addr string) { <-trigger }).
 				Return(packet_start, nil).
 				AnyTimes()
-			err := Run(runner, nil, nil, emit_start, stdio, commandLine, "job", "process", "", []string{}, "", []string{})
+			sigTermChan := make(chan struct{}, 1)
+			resultChan := make(chan error)
+			go func() {
+				err := RunWithTestChan(runner, nil, nil, emit_start, stdio, commandLine, "job", "process", "", []string{}, "", []string{}, sigTermChan)
+				resultChan <- err
+			}()
+
+			sigTermChan <- struct{}{}
+
+			err := <-resultChan
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -586,7 +643,7 @@ var _ = Describe("Run", func() {
 					Times(1),
 			)
 			process.EXPECT().
-				Signal(os.Kill).
+				Signal(syscall.SIGTERM).
 				// Signal kill, then trigger 2nd
 				// `stop`. The emitter contains the
 				// delay giving main the time to
@@ -660,7 +717,18 @@ var _ = Describe("Run", func() {
 					Return(packet_start, nil).
 					AnyTimes(),
 			)
-			err := Run(runner, nil, nil, emitter, stdio, commandLine, "job", "process", "", []string{}, "", []string{})
+			sigTermChan := make(chan struct{}, 1)
+			resultChan := make(chan error)
+			go func() {
+				err := RunWithTestChan(runner, nil, nil, emitter, stdio, commandLine, "job", "process", "", []string{}, "", []string{}, sigTermChan)
+
+				resultChan <- err
+			}()
+
+			time.Sleep(3 * time.Second)
+			sigTermChan <- struct{}{}
+
+			err := <-resultChan
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
@@ -705,7 +773,7 @@ var _ = Describe("Run", func() {
 					Times(1),
 			)
 			process.EXPECT().
-				Signal(os.Kill).
+				Signal(syscall.SIGTERM).
 				// Signal kill, then trigger
 				// `start`. The emitter contains the
 				// delay giving main the time to
@@ -772,7 +840,18 @@ var _ = Describe("Run", func() {
 					Return(packet_start, nil).
 					AnyTimes(),
 			)
-			err := Run(runner, nil, nil, emitter, stdio, commandLine, "job", "process", "", []string{}, "", []string{})
+			sigTermChan := make(chan struct{}, 1)
+			resultChan := make(chan error)
+			go func() {
+				err := RunWithTestChan(runner, nil, nil, emitter, stdio, commandLine, "job", "process", "", []string{}, "", []string{}, sigTermChan)
+
+				resultChan <- err
+			}()
+
+			time.Sleep(3 * time.Second)
+			sigTermChan <- struct{}{}
+
+			err := <-resultChan
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
@@ -851,7 +930,7 @@ var _ = Describe("ProcessRegistry", func() {
 			// Golang runtime internally raises SIGURG; we need to ignore them.
 			p1.EXPECT().Signal(syscall.SIGURG).Return(nil).AnyTimes()
 			p2.EXPECT().Signal(syscall.SIGURG).Return(nil).AnyTimes()
-			
+
 			errors := pr.SignalAll(sig)
 			Expect(errors).To(Equal([]error{}))
 		})

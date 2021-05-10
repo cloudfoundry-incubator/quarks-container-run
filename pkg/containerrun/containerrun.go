@@ -51,7 +51,6 @@ type CmdRun func(
 	postStartConditionCommandArgs []string,
 ) error
 
-// Run implements the logic for the container-run CLI command.
 func Run(
 	runner Runner,
 	conditionRunner Runner,
@@ -66,6 +65,28 @@ func Run(
 	postStartConditionCommandName string,
 	postStartConditionCommandArgs []string,
 ) error {
+	return RunWithTestChan(runner, conditionRunner, commandChecker, listener,
+		stdio, args, jobName, processName,
+		postStartCommandName, postStartCommandArgs, postStartConditionCommandName,
+		postStartConditionCommandArgs, nil)
+}
+
+// Run implements the logic for the container-run CLI command.
+func RunWithTestChan(
+	runner Runner,
+	conditionRunner Runner,
+	commandChecker Checker,
+	listener PacketListener,
+	stdio Stdio,
+	args []string,
+	jobName string,
+	processName string,
+	postStartCommandName string,
+	postStartCommandArgs []string,
+	postStartConditionCommandName string,
+	postStartConditionCommandArgs []string,
+	testSigTermChan chan struct{},
+) error {
 	if len(args) == 0 {
 		err := fmt.Errorf("a command is required")
 		return &runErr{err}
@@ -73,6 +94,9 @@ func Run(
 
 	done := make(chan struct{}, 1)
 	sigterm := make(chan struct{}, 1)
+	if testSigTermChan != nil {
+		sigterm = testSigTermChan
+	}
 	errors := make(chan error)
 	sigs := make(chan os.Signal, 1)
 	commands := make(chan processCommand)
@@ -191,7 +215,6 @@ func Run(
 				time.Sleep(1 * time.Second)
 			}
 		case err := <-errors:
-			fmt.Printf("Error: %v\n", err)
 			// Ignore done signals when we actively
 			// stopped the children via ProcessStop.
 			// Wait returns with !state.Success, `signal: killed`
