@@ -50,6 +50,8 @@ if [ "$CMD" == "running" ]; then
 else
     # "term" is the same as "stop", except we won't wait
     ACTION="${CMD/term/stop}"
+    # Send "START", "STOP", or "QUIT" over UDP to the unix socket
+    # with a 1 seconds timeout to establish the connection.
     echo "${ACTION^^}" | nc -w 1 -uU "${CONTAINER_RUN}.sock"
     if [ "${CMD}" == "stop" ]; then
         for i in $(seq 30); do

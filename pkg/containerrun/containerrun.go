@@ -208,8 +208,7 @@ func RunWithTestChan(
 			// Once we receive a SIGTERM we wait until all child processes have terminated
 			// because Kubernetes will kill the container once the main process exits.
 			for {
-				count := processRegistry.Count()
-				if count == 0 {
+				if processRegistry.Count() == 0 {
 					return nil
 				}
 				time.Sleep(1 * time.Second)
@@ -278,6 +277,9 @@ func handlePacket(
 }
 
 func stopProcesses(processRegistry *ProcessRegistry, errors chan<- error) {
+	// Run the code in a separate goroutine because the errors channel is
+	// unbuffered, so we can't write to it from the same goroutine that
+	// will be reading from it.
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -597,6 +599,9 @@ func NewProcessRegistry() *ProcessRegistry {
 
 // Count returns the number of processes in the registry
 func (pr *ProcessRegistry) Count() int {
+	pr.Lock()
+	defer pr.Unlock()
+
 	return len(pr.processes)
 }
 
@@ -610,13 +615,13 @@ func (pr *ProcessRegistry) Register(p Process) int {
 	return len(pr.processes)
 }
 
-// Unregister removes a process from the registry and returns how many processes are registered.
+// Unregister removes a process from the registry and returns how many processes are still registered.
 func (pr *ProcessRegistry) Unregister(p Process) int {
 	pr.Lock()
 	defer pr.Unlock()
 
 	log.Debugf("Unregistering process %s\n", p)
-	processes := make([]Process, 0)
+	processes := make([]Process, 0, len(pr.processes))
 	for _, process := range pr.processes {
 		if p != process {
 			processes = append(processes, process)
