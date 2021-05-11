@@ -278,16 +278,16 @@ func handlePacket(
 }
 
 func stopProcesses(processRegistry *ProcessRegistry, errors chan<- error) {
-		log.Debugln("sending SIGTERM")
-		for _, err := range processRegistry.SignalAll(syscall.SIGTERM) {
-			errors <- err
-		}
-		// bpm would send a SIGQUIT signal to dump the stack before sending SIGKILL,
-		// but there doesn't seem to be a point to be doing it in this context.
-		processRegistry.timer = time.AfterFunc(sigtermTimeout, func() {
-			log.Debugln("timeout SIGTERM")
-			processRegistry.KillAll()
-		})
+	log.Debugln("sending SIGTERM")
+	for _, err := range processRegistry.SignalAll(syscall.SIGTERM) {
+		errors <- err
+	}
+	// bpm would send a SIGQUIT signal to dump the stack before sending SIGKILL,
+	// but there doesn't seem to be a point to be doing it in this context.
+	processRegistry.timer = time.AfterFunc(sigtermTimeout, func() {
+		log.Debugln("timeout SIGTERM")
+		processRegistry.KillAll()
+	})
 }
 
 func startProcesses(
