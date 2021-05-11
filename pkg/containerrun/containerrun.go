@@ -170,7 +170,8 @@ func RunWithTestChan(
 					// signals.
 
 					active = false
-					stopProcesses(processRegistry, errors)
+					// Run asynchronously so we can receive errors
+					go stopProcesses(processRegistry, errors)
 				}
 			case ProcessStart:
 				if !active {
@@ -277,12 +278,6 @@ func handlePacket(
 }
 
 func stopProcesses(processRegistry *ProcessRegistry, errors chan<- error) {
-	// Run the code in a separate goroutine because the errors channel is
-	// unbuffered, so we can't write to it from the same goroutine that
-	// will be reading from it.
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
 		log.Debugln("sending SIGTERM")
 		for _, err := range processRegistry.SignalAll(syscall.SIGTERM) {
 			errors <- err
@@ -293,9 +288,6 @@ func stopProcesses(processRegistry *ProcessRegistry, errors chan<- error) {
 			log.Debugln("timeout SIGTERM")
 			processRegistry.KillAll()
 		})
-		wg.Done()
-	}()
-	wg.Wait()
 }
 
 func startProcesses(
