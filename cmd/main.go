@@ -3,11 +3,13 @@ package main
 import (
 	"os"
 
-	"code.cloudfoundry.org/quarks-container-run/cmd/containerrun"
+	cmd "code.cloudfoundry.org/quarks-container-run/cmd/containerrun"
+	pkg "code.cloudfoundry.org/quarks-container-run/pkg/containerrun"
 )
 
 func main() {
-	if err := containerrun.NewDefaultContainerRunCmd().Execute(); err != nil {
+	pkg.WriteBPMscript()
+	if err := cmd.NewDefaultContainerRunCmd().Execute(); err != nil {
 		os.Exit(1)
 	}
 }

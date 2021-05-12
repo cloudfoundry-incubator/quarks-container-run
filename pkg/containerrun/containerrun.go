@@ -16,16 +16,21 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
 	postStartTimeout   = time.Minute * 15
 	conditionSleepTime = time.Second * 3
+	sigtermTimeout     = time.Second * 20
 
 	// ProcessStart is the command to restart the suspended child processes.
 	ProcessStart = "START"
 	// ProcessStop is the command to stop and suspend the child processes.
 	ProcessStop = "STOP"
+	// SignalQuit is the command to send a QUIT signal to the child processes.
+	SignalQuit = "QUIT"
 )
 
 type processCommand string
@@ -46,7 +51,6 @@ type CmdRun func(
 	postStartConditionCommandArgs []string,
 ) error
 
-// Run implements the logic for the container-run CLI command.
 func Run(
 	runner Runner,
 	conditionRunner Runner,
@@ -61,17 +65,43 @@ func Run(
 	postStartConditionCommandName string,
 	postStartConditionCommandArgs []string,
 ) error {
+	return RunWithTestChan(runner, conditionRunner, commandChecker, listener,
+		stdio, args, jobName, processName,
+		postStartCommandName, postStartCommandArgs, postStartConditionCommandName,
+		postStartConditionCommandArgs, nil)
+}
+
+// Run implements the logic for the container-run CLI command.
+func RunWithTestChan(
+	runner Runner,
+	conditionRunner Runner,
+	commandChecker Checker,
+	listener PacketListener,
+	stdio Stdio,
+	args []string,
+	jobName string,
+	processName string,
+	postStartCommandName string,
+	postStartCommandArgs []string,
+	postStartConditionCommandName string,
+	postStartConditionCommandArgs []string,
+	testSigTermChan chan struct{},
+) error {
 	if len(args) == 0 {
 		err := fmt.Errorf("a command is required")
 		return &runErr{err}
 	}
 
 	done := make(chan struct{}, 1)
+	sigterm := make(chan struct{}, 1)
+	if testSigTermChan != nil {
+		sigterm = testSigTermChan
+	}
 	errors := make(chan error)
 	sigs := make(chan os.Signal, 1)
 	commands := make(chan processCommand)
 
-	signal.Notify(sigs)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	processRegistry := NewProcessRegistry()
 
 	command := Command{
@@ -88,6 +118,8 @@ func Run(
 	}
 
 	if err := startProcesses(
+		jobName,
+		processName,
 		runner,
 		conditionRunner,
 		commandChecker,
@@ -102,7 +134,7 @@ func Run(
 		return err
 	}
 
-	go processRegistry.HandleSignals(sigs, errors)
+	go processRegistry.HandleSignals(sigs, sigterm, errors)
 
 	// This flag records the state of the system and its child
 	// processes. It is set to true when the child processes are
@@ -116,13 +148,13 @@ func Run(
 	for {
 		select {
 		case cmd := <-commands:
+			log.Debugf("Received %s command\n", cmd)
 			// Note: Commands are ignored if the system is
 			// already in the requested state. I.e
 			// demanding things to stop when things are
 			// already stopped does nothing. Similarly for
 			// demanding a start when the children are
 			// started/up/active.
-
 			switch cmd {
 			case ProcessStop:
 				if active {
@@ -138,11 +170,17 @@ func Run(
 					// signals.
 
 					active = false
-					stopProcesses(processRegistry, errors)
+					// Run asynchronously so we can receive errors
+					go stopProcesses(processRegistry, errors)
 				}
 			case ProcessStart:
 				if !active {
+					// Make sure any previous instance is gone now, and the kill timer is stopped.
+					processRegistry.KillAll()
+
 					err := startProcesses(
+						jobName,
+						processName,
 						runner,
 						conditionRunner,
 						commandChecker,
@@ -159,17 +197,27 @@ func Run(
 
 					active = true
 				}
+			case SignalQuit:
+				processRegistry.SignalAll(syscall.SIGQUIT)
 			}
 		case <-done:
-			// Ignore a done process when we actively
-			// stopped the children via ProcessStop.
-			if active {
-				return nil
+			// When the main process returns without error, treat it the
+			// same as if it has been stopped.
+			active = false
+		case <-sigterm:
+			log.Debugln("Waiting for all children to stop")
+			// Once we receive a SIGTERM we wait until all child processes have terminated
+			// because Kubernetes will kill the container once the main process exits.
+			for {
+				if processRegistry.Count() == 0 {
+					return nil
+				}
+				time.Sleep(1 * time.Second)
 			}
 		case err := <-errors:
 			// Ignore done signals when we actively
 			// stopped the children via ProcessStop.
-			// Wait returns with !state.Sucess, `signal: killed`
+			// Wait returns with !state.Success, `signal: killed`
 			if active {
 				return err
 			}
@@ -222,7 +270,7 @@ func handlePacket(
 
 	command := strings.TrimSpace(string(packet[:n]))
 	switch command {
-	case ProcessStart, ProcessStop:
+	case ProcessStart, ProcessStop, SignalQuit:
 		commands <- processCommand(command)
 	default:
 		// Bad commands are ignored. Else they could be used to DOS the runner.
@@ -230,12 +278,21 @@ func handlePacket(
 }
 
 func stopProcesses(processRegistry *ProcessRegistry, errors chan<- error) {
-	for _, err := range processRegistry.SignalAll(os.Kill) {
+	log.Debugln("sending SIGTERM")
+	for _, err := range processRegistry.SignalAll(syscall.SIGTERM) {
 		errors <- err
 	}
+	// bpm would send a SIGQUIT signal to dump the stack before sending SIGKILL,
+	// but there doesn't seem to be a point to be doing it in this context.
+	processRegistry.timer = time.AfterFunc(sigtermTimeout, func() {
+		log.Debugln("timeout SIGTERM")
+		processRegistry.KillAll()
+	})
 }
 
 func startProcesses(
+	jobName string,
+	processName string,
 	runner Runner,
 	conditionRunner Runner,
 	commandChecker Checker,
@@ -248,6 +305,8 @@ func startProcesses(
 	done chan struct{},
 ) error {
 	if err := startMainProcess(
+		jobName,
+		processName,
 		runner,
 		command,
 		stdio,
@@ -272,6 +331,8 @@ func startProcesses(
 }
 
 func startMainProcess(
+	jobName string,
+	processName string,
 	runner Runner,
 	command Command,
 	stdio Stdio,
@@ -285,11 +346,21 @@ func startMainProcess(
 	}
 	processRegistry.Register(process)
 
+	sentinel := fmt.Sprintf("/var/vcap/data/%s/%s_containerrun.running", jobName, processName)
+	file, _ := os.Create(sentinel)
+	_ = file.Close()
+
 	go func() {
 		if err := process.Wait(); err != nil {
+			log.Debugf("Process has failed with error: %s\n", err)
+			processRegistry.Unregister(process)
+			os.Remove(sentinel)
 			errors <- &runErr{err}
 			return
 		}
+		log.Debugln("Process has ended normally")
+		processRegistry.Unregister(process)
+		os.Remove(sentinel)
 		done <- struct{}{}
 	}()
 
@@ -330,6 +401,7 @@ func startPostStartProcesses(
 					return
 				}
 				processRegistry.Register(postStartProcess)
+				defer processRegistry.Unregister(postStartProcess)
 				if err := postStartProcess.Wait(); err != nil {
 					errors <- &runErr{err}
 					return
@@ -504,6 +576,7 @@ type Stdio struct {
 // ProcessRegistry handles all the processes.
 type ProcessRegistry struct {
 	processes []Process
+	timer     *time.Timer
 	sync.Mutex
 }
 
@@ -511,14 +584,45 @@ type ProcessRegistry struct {
 func NewProcessRegistry() *ProcessRegistry {
 	return &ProcessRegistry{
 		processes: make([]Process, 0),
+		// It should always be safe to call timer.Stop(), so it must not be nil.
+		timer: time.NewTimer(time.Millisecond),
 	}
+}
+
+// Count returns the number of processes in the registry
+func (pr *ProcessRegistry) Count() int {
+	pr.Lock()
+	defer pr.Unlock()
+
+	return len(pr.processes)
 }
 
 // Register registers a process in the registry and returns how many processes are registered.
 func (pr *ProcessRegistry) Register(p Process) int {
 	pr.Lock()
 	defer pr.Unlock()
+
+	log.Debugf("Registering process %s\n", p)
 	pr.processes = append(pr.processes, p)
+	return len(pr.processes)
+}
+
+// Unregister removes a process from the registry and returns how many processes are still registered.
+func (pr *ProcessRegistry) Unregister(p Process) int {
+	pr.Lock()
+	defer pr.Unlock()
+
+	log.Debugf("Unregistering process %s\n", p)
+	processes := make([]Process, 0, len(pr.processes))
+	for _, process := range pr.processes {
+		if p != process {
+			processes = append(processes, process)
+		}
+	}
+	pr.processes = processes
+	if len(pr.processes) == 0 {
+		pr.timer.Stop()
+	}
 	return len(pr.processes)
 }
 
@@ -526,6 +630,7 @@ func (pr *ProcessRegistry) Register(p Process) int {
 func (pr *ProcessRegistry) SignalAll(sig os.Signal) []error {
 	pr.Lock()
 	defer pr.Unlock()
+	log.Debugf("Sending '%s' signal to %d processes\n", sig, len(pr.processes))
 	errors := make([]error, 0)
 	for _, p := range pr.processes {
 		if err := p.Signal(sig); err != nil {
@@ -535,14 +640,28 @@ func (pr *ProcessRegistry) SignalAll(sig os.Signal) []error {
 	return errors
 }
 
+// KillAll stops the timer and sends a kill signal to all registered processes.
+func (pr *ProcessRegistry) KillAll() {
+	log.Debugln("KillAll")
+	pr.timer.Stop()
+	pr.SignalAll(os.Kill)
+}
+
 // HandleSignals handles the signals channel and forwards them to the
 // registered processes. After a signal is handled it keeps running to
 // handle any future ones.
-func (pr *ProcessRegistry) HandleSignals(sigs <-chan os.Signal, errors chan<- error) {
+func (pr *ProcessRegistry) HandleSignals(sigs <-chan os.Signal, sigterm chan<- struct{}, errors chan<- error) {
 	for {
 		sig := <-sigs
-		for _, err := range pr.SignalAll(sig) {
-			errors <- err
+		log.Debugf("Received '%s' signal\n", sig)
+		if sig == syscall.SIGTERM || sig == syscall.SIGINT {
+			stopProcesses(pr, errors)
+			log.Debugln("Write to sigterm channel")
+			sigterm <- struct{}{}
+		} else {
+			for _, err := range pr.SignalAll(sig) {
+				errors <- err
+			}
 		}
 	}
 }

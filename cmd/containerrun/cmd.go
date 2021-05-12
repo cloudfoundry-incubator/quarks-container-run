@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	pkg "code.cloudfoundry.org/quarks-container-run/pkg/containerrun"
@@ -26,6 +27,7 @@ func NewContainerRunCmd(
 	var postStartCommandArgs []string
 	var postStartConditionCommandName string
 	var postStartConditionCommandArgs []string
+	var debug bool
 
 	cmd := &cobra.Command{
 		Use:           "container-run",
@@ -33,6 +35,9 @@ func NewContainerRunCmd(
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			if debug {
+				log.SetLevel(log.DebugLevel)
+			}
 			return run(
 				runner,
 				conditionRunner,
@@ -56,6 +61,7 @@ func NewContainerRunCmd(
 	cmd.Flags().StringArrayVar(&postStartCommandArgs, "post-start-arg", []string{}, "a post-start command arg")
 	cmd.Flags().StringVar(&postStartConditionCommandName, "post-start-condition-name", "", "the post-start condition command name")
 	cmd.Flags().StringArrayVar(&postStartConditionCommandArgs, "post-start-condition-arg", []string{}, "a post-start condition command arg")
+	cmd.Flags().BoolVar(&debug, "debug", false, "enable debug logging")
 
 	return cmd
 }
