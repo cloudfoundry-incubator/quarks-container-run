@@ -12,6 +12,8 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -347,20 +349,33 @@ func startMainProcess(
 	processRegistry.Register(process)
 
 	sentinel := fmt.Sprintf("/var/vcap/data/%s/%s_containerrun.running", jobName, processName)
-	file, _ := os.Create(sentinel)
-	_ = file.Close()
+	err = ioutil.WriteFile(sentinel, nil, 0755)
+	if err != nil {
+		return err
+	}
+	pidfile := fmt.Sprintf("/var/vcap/sys/run/bpm/%s/%s.pid", jobName, processName)
+	err = os.MkdirAll(filepath.Dir(pidfile), 0755)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(pidfile, []byte(strconv.Itoa(process.Pid())), 0755)
+	if err != nil {
+		return err
+	}
 
 	go func() {
 		if err := process.Wait(); err != nil {
 			log.Debugf("Process has failed with error: %s\n", err)
 			processRegistry.Unregister(process)
-			os.Remove(sentinel)
+			_ = os.Remove(sentinel)
+			_ = os.Remove(pidfile)
 			errors <- &runErr{err}
 			return
 		}
 		log.Debugln("Process has ended normally")
 		processRegistry.Unregister(process)
-		os.Remove(sentinel)
+		_ = os.Remove(sentinel)
+		_ = os.Remove(pidfile)
 		done <- struct{}{}
 	}()
 
@@ -468,7 +483,7 @@ func (cr *ContainerRunner) run(
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to run command: %v", err)
 	}
-	return NewContainerProcess(cmd.Process), nil
+	return NewContainerProcess(cmd.Process, cmd.Process.Pid), nil
 }
 
 // ConditionRunner satisfies the Runner interface. It represents a runner for a post-start
@@ -521,6 +536,7 @@ func (cr *ConditionRunner) RunContext(
 
 // Process is the interface that wraps the Signal and Wait methods of a process.
 type Process interface {
+	Pid() int
 	Signal(os.Signal) error
 	Wait() error
 }
@@ -534,12 +550,14 @@ type OSProcess interface {
 // ContainerProcess satisfies the Process interface.
 type ContainerProcess struct {
 	process OSProcess
+	pid int
 }
 
 // NewContainerProcess constructs a new ContainerProcess.
-func NewContainerProcess(process OSProcess) *ContainerProcess {
+func NewContainerProcess(process OSProcess, pid int) *ContainerProcess {
 	return &ContainerProcess{
 		process: process,
+		pid: pid,
 	}
 }
 
@@ -565,6 +583,10 @@ func (p *ContainerProcess) Wait() error {
 		return fmt.Errorf("failed to run process: %v", err)
 	}
 	return nil
+}
+
+func (p *ContainerProcess) Pid() int {
+	return p.pid
 }
 
 // Stdio represents the STDOUT and STDERR to be used by a process.
