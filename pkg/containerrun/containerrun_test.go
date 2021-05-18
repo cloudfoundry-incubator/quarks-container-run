@@ -990,7 +990,7 @@ var _ = Describe("ProcessRegistry", func() {
 var _ = Describe("ContainerProcess", func() {
 	Context("NewContainerProcess", func() {
 		It("constructs a new ContainerProcess", func() {
-			cp := NewContainerProcess(nil)
+			cp := NewContainerProcess(nil, 0)
 			Expect(cp).ToNot(BeNil())
 		})
 	})
@@ -1008,7 +1008,7 @@ var _ = Describe("ContainerProcess", func() {
 
 		It("is no-op if the process is not running", func() {
 			p := NewMockOSProcess(ctrl)
-			cp := NewContainerProcess(p)
+			cp := NewContainerProcess(p, 0)
 
 			p.EXPECT().
 				Signal(syscall.Signal(0)).
@@ -1021,7 +1021,7 @@ var _ = Describe("ContainerProcess", func() {
 
 		It("fails if signaling the unlerlying process fails", func() {
 			p := NewMockOSProcess(ctrl)
-			cp := NewContainerProcess(p)
+			cp := NewContainerProcess(p, 0)
 			sig := syscall.SIGTERM
 
 			gomock.InOrder(
@@ -1041,7 +1041,7 @@ var _ = Describe("ContainerProcess", func() {
 
 		It("succeeds when signaling the underlying process succeeds", func() {
 			p := NewMockOSProcess(ctrl)
-			cp := NewContainerProcess(p)
+			cp := NewContainerProcess(p, 0)
 			sig := syscall.SIGTERM
 
 			gomock.InOrder(
@@ -1078,7 +1078,7 @@ var _ = Describe("ContainerProcess", func() {
 				Return(nil, fmt.Errorf(`¯\_(ツ)_/¯`)).
 				Times(1)
 
-			cp := NewContainerProcess(p)
+			cp := NewContainerProcess(p, 0)
 			err := cp.Wait()
 			Expect(err).To(Equal(fmt.Errorf(`failed to run process: ¯\_(ツ)_/¯`)))
 		})
@@ -1091,7 +1091,7 @@ var _ = Describe("ContainerProcess", func() {
 				Return(state, nil).
 				Times(1)
 
-			cp := NewContainerProcess(p)
+			cp := NewContainerProcess(p, 0)
 			err := cp.Wait()
 			Expect(err).ToNot(HaveOccurred())
 		})
