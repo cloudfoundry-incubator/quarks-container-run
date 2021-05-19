@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"sync"
@@ -40,9 +41,16 @@ var _ = Describe("Run", func() {
 
 	var ctrl *gomock.Controller
 	var spinner *MockPacketListener
+	var tempDir string
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
+		var err error
+		tempDir, err = ioutil.TempDir(os.TempDir(), "ginkgoTest")
+		if err != nil {
+			log.Fatal(err)
+		}
+		SetBasePath(tempDir)
 
 		// Creating a listener spinning out an infinity of
 		// empty packets when called upon. This keeps the
@@ -81,6 +89,7 @@ var _ = Describe("Run", func() {
 
 	AfterEach(func() {
 		ctrl.Finish()
+		os.RemoveAll(tempDir)
 	})
 
 	It("fails when args is empty", func() {
@@ -107,6 +116,10 @@ var _ = Describe("Run", func() {
 			Return(fmt.Errorf(`¯\_(ツ)_/¯`)).
 			Times(1)
 		process.EXPECT().
+			Pid().
+			Return(99).
+			Times(1)
+		process.EXPECT().
 			Signal(gomock.Any()).
 			Return(nil).
 			AnyTimes()
@@ -125,6 +138,10 @@ var _ = Describe("Run", func() {
 		process.EXPECT().
 			Wait().
 			Return(nil).
+			Times(1)
+		process.EXPECT().
+			Pid().
+			Return(99).
 			Times(1)
 		process.EXPECT().
 			Signal(gomock.Any()).
@@ -154,6 +171,10 @@ var _ = Describe("Run", func() {
 		process.EXPECT().
 			Wait().
 			Return(nil).
+			Times(1)
+		process.EXPECT().
+			Pid().
+			Return(99).
 			Times(1)
 		process.EXPECT().
 			Signal(gomock.Any()).
@@ -193,6 +214,10 @@ var _ = Describe("Run", func() {
 				Return(nil).
 				AnyTimes()
 			process.EXPECT().
+				Pid().
+				Return(99).
+				Times(1)
+			process.EXPECT().
 				Signal(gomock.Any()).
 				Return(nil).
 				AnyTimes()
@@ -227,6 +252,10 @@ var _ = Describe("Run", func() {
 				Do(func() { time.Sleep(time.Second) }).
 				Return(nil).
 				AnyTimes()
+			process.EXPECT().
+				Pid().
+				Return(99).
+				Times(1)
 			process.EXPECT().
 				Signal(gomock.Any()).
 				Return(nil).
@@ -271,6 +300,10 @@ var _ = Describe("Run", func() {
 				Do(postStartWg.Wait).
 				Return(nil).
 				AnyTimes()
+			process.EXPECT().
+				Pid().
+				Return(99).
+				Times(1)
 			process.EXPECT().
 				Signal(gomock.Any()).
 				Return(nil).
@@ -332,6 +365,10 @@ var _ = Describe("Run", func() {
 				Return(nil).
 				AnyTimes()
 			process.EXPECT().
+				Pid().
+				Return(99).
+				Times(1)
+			process.EXPECT().
 				Signal(gomock.Any()).
 				Return(nil).
 				AnyTimes()
@@ -364,6 +401,10 @@ var _ = Describe("Run", func() {
 				Do(postStartWg.Wait).
 				Return(nil).
 				AnyTimes()
+			process.EXPECT().
+				Pid().
+				Return(99).
+				Times(1)
 			process.EXPECT().
 				Signal(gomock.Any()).
 				Return(nil).
@@ -430,6 +471,10 @@ var _ = Describe("Run", func() {
 				// Delay to give the bogus command time for reception and processing.
 				Do(func() { time.Sleep(time.Second) }).
 				Return(nil).
+				Times(1)
+			process.EXPECT().
+				Pid().
+				Return(99).
 				Times(1)
 			process.EXPECT().
 				Signal(os.Kill).
@@ -499,6 +544,10 @@ var _ = Describe("Run", func() {
 				Return(nil).
 				Times(1)
 			process.EXPECT().
+				Pid().
+				Return(99).
+				Times(1)
+			process.EXPECT().
 				Signal(os.Kill).
 				Return(nil).
 				Times(0)
@@ -562,6 +611,10 @@ var _ = Describe("Run", func() {
 				// command some time for processing
 				Do(func() { trigger <- struct{}{}; time.Sleep(time.Second) }).
 				Return(nil).
+				Times(1)
+			process.EXPECT().
+				Pid().
+				Return(99).
 				Times(1)
 			process.EXPECT().
 				Signal(os.Kill).
@@ -631,12 +684,20 @@ var _ = Describe("Run", func() {
 				// Initial start, trigger `stop`
 				// command, then wait for kill.
 				process.EXPECT().
+					Pid().
+					Return(99).
+					Times(1),
+				process.EXPECT().
 					Wait().
 					Do(func() { trigger <- struct{}{}; <-killed }).
 					Return(nil).
 					Times(1),
 				// Second start, via `start` command.
 				// Be done.
+				process.EXPECT().
+					Pid().
+					Return(99).
+					Times(1),
 				process.EXPECT().
 					Wait().
 					Return(nil).
@@ -761,12 +822,20 @@ var _ = Describe("Run", func() {
 				// Initial start, trigger `stop`
 				// command, then wait for kill.
 				process.EXPECT().
+					Pid().
+					Return(99).
+					Times(1),
+				process.EXPECT().
 					Wait().
 					Do(func() { trigger <- struct{}{}; <-killed }).
 					Return(nil).
 					Times(1),
 				// Second start, via `start` command.
 				// Be done.
+				process.EXPECT().
+					Pid().
+					Return(99).
+					Times(1),
 				process.EXPECT().
 					Wait().
 					Return(nil).

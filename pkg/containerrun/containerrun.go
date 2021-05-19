@@ -53,6 +53,12 @@ type CmdRun func(
 	postStartConditionCommandArgs []string,
 ) error
 
+var basePath string = "/var/vcap"
+
+func SetBasePath(newPath string) {
+	basePath = newPath
+}
+
 func Run(
 	runner Runner,
 	conditionRunner Runner,
@@ -233,7 +239,7 @@ func watchForCommands(
 	errors chan error,
 	commands chan processCommand,
 ) error {
-	sockAddr := fmt.Sprintf("/var/vcap/data/%s/%s_containerrun.sock", jobName, processName)
+	sockAddr := fmt.Sprintf("%s/data/%s/%s_containerrun.sock", basePath, jobName, processName)
 
 	go func() {
 		for {
@@ -348,12 +354,16 @@ func startMainProcess(
 	}
 	processRegistry.Register(process)
 
-	sentinel := fmt.Sprintf("/var/vcap/data/%s/%s_containerrun.running", jobName, processName)
+	sentinel := fmt.Sprintf("%s/data/%s/%s_containerrun.running", basePath, jobName, processName)
+	err = os.MkdirAll(filepath.Dir(sentinel), 0755)
+	if err != nil {
+		return err
+	}
 	err = ioutil.WriteFile(sentinel, nil, 0755)
 	if err != nil {
 		return err
 	}
-	pidfile := fmt.Sprintf("/var/vcap/sys/run/bpm/%s/%s.pid", jobName, processName)
+	pidfile := fmt.Sprintf("%s/sys/run/bpm/%s/%s.pid", basePath, jobName, processName)
 	err = os.MkdirAll(filepath.Dir(pidfile), 0755)
 	if err != nil {
 		return err
@@ -550,14 +560,14 @@ type OSProcess interface {
 // ContainerProcess satisfies the Process interface.
 type ContainerProcess struct {
 	process OSProcess
-	pid int
+	pid     int
 }
 
 // NewContainerProcess constructs a new ContainerProcess.
 func NewContainerProcess(process OSProcess, pid int) *ContainerProcess {
 	return &ContainerProcess{
 		process: process,
-		pid: pid,
+		pid:     pid,
 	}
 }
 
