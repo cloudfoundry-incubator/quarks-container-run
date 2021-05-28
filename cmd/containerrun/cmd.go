@@ -28,6 +28,7 @@ func NewContainerRunCmd(
 	var postStartConditionCommandName string
 	var postStartConditionCommandArgs []string
 	var debug bool
+	var errand bool
 
 	cmd := &cobra.Command{
 		Use:           "container-run",
@@ -47,6 +48,7 @@ func NewContainerRunCmd(
 				args,
 				jobName,
 				processName,
+				errand,
 				postStartCommandName,
 				postStartCommandArgs,
 				postStartConditionCommandName,
@@ -62,6 +64,7 @@ func NewContainerRunCmd(
 	cmd.Flags().StringVar(&postStartConditionCommandName, "post-start-condition-name", "", "the post-start condition command name")
 	cmd.Flags().StringArrayVar(&postStartConditionCommandArgs, "post-start-condition-arg", []string{}, "a post-start condition command arg")
 	cmd.Flags().BoolVar(&debug, "debug", false, "enable debug logging")
+	cmd.Flags().BoolVar(&errand, "errand", false, "errands terminate container-run even when they exit with exit code 0")
 
 	return cmd
 }

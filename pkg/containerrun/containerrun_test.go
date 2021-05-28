@@ -93,7 +93,7 @@ var _ = Describe("Run", func() {
 	})
 
 	It("fails when args is empty", func() {
-		err := Run(nil, nil, nil, nil, stdio, []string{}, "job", "process", "", []string{}, "", []string{})
+		err := Run(nil, nil, nil, nil, stdio, []string{}, "job", "process", false,"", []string{}, "", []string{})
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal("failed to run container: a command is required"))
 	})
@@ -104,7 +104,7 @@ var _ = Describe("Run", func() {
 			Run(command, stdio).
 			Return(nil, fmt.Errorf(`¯\_(ツ)_/¯`)).
 			Times(1)
-		err := Run(runner, nil, nil, nil, stdio, commandLine, "job", "process", "", []string{}, "", []string{})
+		err := Run(runner, nil, nil, nil, stdio, commandLine, "job", "process", false,"", []string{}, "", []string{})
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal(`failed to run container: ¯\_(ツ)_/¯`))
 	})
@@ -128,7 +128,7 @@ var _ = Describe("Run", func() {
 			Run(command, stdio).
 			Return(process, nil).
 			Times(1)
-		err := Run(runner, nil, nil, spinner, stdio, commandLine, "job", "process", "", []string{}, "", []string{})
+		err := Run(runner, nil, nil, spinner, stdio, commandLine, "job", "process", false,"", []string{}, "", []string{})
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal(`failed to run container: ¯\_(ツ)_/¯`))
 	})
@@ -156,7 +156,7 @@ var _ = Describe("Run", func() {
 		sigTermChan := make(chan struct{}, 1)
 		resultChan := make(chan error)
 		go func() {
-			err := RunWithTestChan(runner, nil, nil, spinner, stdio, commandLine, "job", "process", "", []string{}, "", []string{}, sigTermChan)
+			err := RunWithTestChan(runner, nil, nil, spinner, stdio, commandLine, "job", "process", false,"", []string{}, "", []string{}, sigTermChan)
 			resultChan <- err
 		}()
 
@@ -193,7 +193,7 @@ var _ = Describe("Run", func() {
 		sigTermChan := make(chan struct{}, 1)
 		resultChan := make(chan error)
 		go func() {
-			err := RunWithTestChan(runner, nil, checker, spinner, stdio, commandLine, "job", "process", postStart.Name, postStart.Arg, "", []string{}, sigTermChan)
+			err := RunWithTestChan(runner, nil, checker, spinner, stdio, commandLine, "job", "process", false, postStart.Name, postStart.Arg, "", []string{}, sigTermChan)
 			resultChan <- err
 		}()
 
@@ -238,7 +238,7 @@ var _ = Describe("Run", func() {
 				Return(true).
 				Times(1)
 			conditionRunner := NewMockRunner(ctrl)
-			err := Run(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", postStart.Name, postStart.Arg, "", []string{})
+			err := Run(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", false, postStart.Name, postStart.Arg, "", []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(fmt.Errorf("failed to run container: %v", expectedErr).Error()))
 		})
@@ -286,7 +286,7 @@ var _ = Describe("Run", func() {
 				Return(true).
 				Times(1)
 			conditionRunner := NewMockRunner(ctrl)
-			err := Run(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", postStart.Name, postStart.Arg, "", []string{})
+			err := Run(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", false, postStart.Name, postStart.Arg, "", []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(fmt.Errorf("failed to run container: %v", expectedErr).Error()))
 		})
@@ -343,7 +343,7 @@ var _ = Describe("Run", func() {
 			sigTermChan := make(chan struct{}, 1)
 			resultChan := make(chan error)
 			go func() {
-				err := RunWithTestChan(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", postStart.Name, postStart.Arg, "", []string{}, sigTermChan)
+				err := RunWithTestChan(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", false, postStart.Name, postStart.Arg, "", []string{}, sigTermChan)
 				resultChan <- err
 			}()
 
@@ -387,7 +387,7 @@ var _ = Describe("Run", func() {
 				RunContext(gomock.Any(), postStartCondition, gomock.Any()).
 				Return(nil, expectedErr).
 				Times(1)
-			err := Run(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", postStart.Name, postStart.Arg, postStartCondition.Name, postStartCondition.Arg)
+			err := Run(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", false, postStart.Name, postStart.Arg, postStartCondition.Name, postStartCondition.Arg)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(fmt.Errorf("failed to run container: %v", expectedErr).Error()))
 		})
@@ -452,7 +452,7 @@ var _ = Describe("Run", func() {
 			sigTermChan := make(chan struct{}, 1)
 			resultChan := make(chan error)
 			go func() {
-				err := RunWithTestChan(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", postStart.Name, postStart.Arg, postStartCondition.Name, postStartCondition.Arg, sigTermChan)
+				err := RunWithTestChan(runner, conditionRunner, checker, spinner, stdio, commandLine, "job", "process", false, postStart.Name, postStart.Arg, postStartCondition.Name, postStartCondition.Arg, sigTermChan)
 				resultChan <- err
 			}()
 
@@ -519,7 +519,7 @@ var _ = Describe("Run", func() {
 			sigTermChan := make(chan struct{}, 1)
 			resultChan := make(chan error)
 			go func() {
-				err := RunWithTestChan(runner, nil, nil, emit_bogus, stdio, commandLine, "job", "process", "", []string{}, "", []string{}, sigTermChan)
+				err := RunWithTestChan(runner, nil, nil, emit_bogus, stdio, commandLine, "job", "process", false,"", []string{}, "", []string{}, sigTermChan)
 				resultChan <- err
 			}()
 
@@ -584,7 +584,7 @@ var _ = Describe("Run", func() {
 				Do(func(net, addr string) { <-trigger }).
 				Return(packet_error, nil).
 				AnyTimes()
-			err := Run(runner, nil, nil, emit_error, stdio, commandLine, "job", "process", "", []string{}, "", []string{})
+			err := Run(runner, nil, nil, emit_error, stdio, commandLine, "job", "process", false,"", []string{}, "", []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("failed to read command: bogus"))
 		})
@@ -660,7 +660,7 @@ var _ = Describe("Run", func() {
 			sigTermChan := make(chan struct{}, 1)
 			resultChan := make(chan error)
 			go func() {
-				err := RunWithTestChan(runner, nil, nil, emit_start, stdio, commandLine, "job", "process", "", []string{}, "", []string{}, sigTermChan)
+				err := RunWithTestChan(runner, nil, nil, emit_start, stdio, commandLine, "job", "process", false,"", []string{}, "", []string{}, sigTermChan)
 				resultChan <- err
 			}()
 
@@ -781,7 +781,7 @@ var _ = Describe("Run", func() {
 			sigTermChan := make(chan struct{}, 1)
 			resultChan := make(chan error)
 			go func() {
-				err := RunWithTestChan(runner, nil, nil, emitter, stdio, commandLine, "job", "process", "", []string{}, "", []string{}, sigTermChan)
+				err := RunWithTestChan(runner, nil, nil, emitter, stdio, commandLine, "job", "process", false,"", []string{}, "", []string{}, sigTermChan)
 
 				resultChan <- err
 			}()
@@ -912,7 +912,7 @@ var _ = Describe("Run", func() {
 			sigTermChan := make(chan struct{}, 1)
 			resultChan := make(chan error)
 			go func() {
-				err := RunWithTestChan(runner, nil, nil, emitter, stdio, commandLine, "job", "process", "", []string{}, "", []string{}, sigTermChan)
+				err := RunWithTestChan(runner, nil, nil, emitter, stdio, commandLine, "job", "process", false,"", []string{}, "", []string{}, sigTermChan)
 
 				resultChan <- err
 			}()

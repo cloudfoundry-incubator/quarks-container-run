@@ -47,6 +47,7 @@ type CmdRun func(
 	args []string,
 	jobName string,
 	processName string,
+	errand bool,
 	postStartCommandName string,
 	postStartCommandArgs []string,
 	postStartConditionCommandName string,
@@ -68,13 +69,14 @@ func Run(
 	args []string,
 	jobName string,
 	processName string,
+	errand bool,
 	postStartCommandName string,
 	postStartCommandArgs []string,
 	postStartConditionCommandName string,
 	postStartConditionCommandArgs []string,
 ) error {
 	return RunWithTestChan(runner, conditionRunner, commandChecker, listener,
-		stdio, args, jobName, processName,
+		stdio, args, jobName, processName, errand,
 		postStartCommandName, postStartCommandArgs, postStartConditionCommandName,
 		postStartConditionCommandArgs, nil)
 }
@@ -89,6 +91,7 @@ func RunWithTestChan(
 	args []string,
 	jobName string,
 	processName string,
+	errand bool,
 	postStartCommandName string,
 	postStartCommandArgs []string,
 	postStartConditionCommandName string,
@@ -209,6 +212,9 @@ func RunWithTestChan(
 				processRegistry.SignalAll(syscall.SIGQUIT)
 			}
 		case <-done:
+			if errand {
+				return nil
+			}
 			// When the main process returns without error, treat it the
 			// same as if it has been stopped.
 			active = false
